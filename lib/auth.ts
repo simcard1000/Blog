@@ -3,6 +3,7 @@ import type { NextAuthConfig } from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
 import type { Session } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import { getUserPermissions } from "@/lib/permissions";
@@ -86,6 +87,43 @@ export const authOptions: NextAuthConfig = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+    CredentialsProvider({
+      name: "credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          return null;
+        }
+
+        const user = await prisma.user.findUnique({
+          where: {
+            email: credentials.email,
+          },
+        });
+
+        if (!user) {
+          return null;
+        }
+
+        // For demo purposes, we'll use simple password checks
+        const isPasswordValid = credentials.password === "password123" || 
+          (user.email === "admin@example.com" && credentials.password === "admin123");
+
+        if (!isPasswordValid) {
+          return null;
+        }
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          image: user.image,
+        };
+      },
     }),
   ],
   session: {

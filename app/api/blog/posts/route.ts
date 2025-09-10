@@ -1,52 +1,99 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { z } from "zod";
+import { checkApiPermissions } from "@/lib/api-permissions";
+import { prisma } from "@/lib/prisma";
 
-// Validation schema for creating a blog post
-const createPostSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  description: z.string().min(1, "Description is required"),
-  content: z.string().min(1, "Content is required"),
-  catSlug: z.string().min(1, "Category is required"),
-  status: z.enum(["DRAFT", "PUBLISHED"]),
-  isPrivate: z.boolean().default(false),
-  tags: z.string().default(""),
-  keywords: z.string().default(""),
-  readTime: z.number().optional(),
-  img: z.string().optional(),
-  metaTitle: z.string().optional(),
-  metaDescription: z.string().optional(),
-});
+export async function POST(request: NextRequest) {
+  try {
+    const permissionCheck = await checkApiPermissions(['WRITE_BLOG']);
+    if (!permissionCheck.authorized) {
+      return NextResponse.json(
+        { error: permissionCheck.error },
+        { status: permissionCheck.status }
+      );
+    }
 
-// GET /api/blog/posts - Get all blog posts
+    const body = await request.json();
+    const { title, description, content, catSlug, status, isPrivate, tags, keywords, readTime, metaTitle, metaDescription } = body;
+
+    // Generate slug from title
+    const slug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
+    // Check if slug already exists
+    const existingPost = await prisma.blogPost.findUnique({
+      where: { slug },
+    });
+
+    if (existingPost) {
+      return NextResponse.json(
+        { error: "A blog post with this title already exists" },
+        { status: 400 }
+      );
+    }
+
+    const blogPost = await prisma.blogPost.create({
+      data: {
+        title,
+        description,
+        content,
+        slug,
+        status,
+        isPrivate,
+        tags: tags || [],
+        keywords: keywords || [],
+        readTime,
+        metaTitle: metaTitle || null,
+        metaDescription: metaDescription || null,
+        catSlug,
+        userEmail: permissionCheck.user!.email!,
+        publishedAt: status === "PUBLISHED" ? new Date() : null,
+      },
+    });
+
+    return NextResponse.json(blogPost);
+  } catch (error) {
+    console.error("Error creating blog post:", error);
+    return NextResponse.json(
+      { error: "Failed to create blog post" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const category = searchParams.get("category");
-    const status = searchParams.get("status") || "PUBLISHED";
-    const isPrivate = searchParams.get("isPrivate") === "true";
+    const permissionCheck = await checkApiPermissions(['WRITE_BLOG']);
+    if (!permissionCheck.authorized) {
+      return NextResponse.json(
+        { error: permissionCheck.error },
+        { status: permissionCheck.status }
+      );
+    }
 
-    const posts = await db.blogPost.findMany({
+    // Get user's blog posts
+    const posts = await prisma.blogPost.findMany({
       where: {
-        status: status as "DRAFT" | "PUBLISHED",
-        isPrivate,
-        ...(category && { catSlug: category }),
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
-        category: true,
+        userEmail: permissionCheck.user!.email!,
       },
       orderBy: {
-        publishedAt: "desc",
+        createdAt: 'desc',
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        slug: true,
+        status: true,
+        publishedAt: true,
+        views: true,
+        readTime: true,
+        tags: true,
+        metaTitle: true,
+        metaDescription: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 
@@ -58,84 +105,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-// POST /api/blog/posts - Create a new blog post
-export async function POST(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const validatedData = createPostSchema.parse(body);
-
-    // Check if category exists
-    const category = await db.blogCategory.findUnique({
-      where: { slug: validatedData.catSlug },
-    });
-
-    if (!category) {
-      return NextResponse.json(
-        { error: "Category not found" },
-        { status: 400 }
-      );
-    }
-
-    // Generate slug from title
-    const slug = validatedData.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "");
-
-    // Check if slug already exists
-    const existingPost = await db.blogPost.findUnique({
-      where: { slug },
-    });
-
-    const finalSlug = existingPost ? `${slug}-${Date.now()}` : slug;
-
-    // Calculate read time (rough estimate: 200 words per minute)
-    const wordCount = validatedData.content.split(/\s+/).length;
-    const readTime = Math.ceil(wordCount / 200);
-
-    const post = await db.blogPost.create({
-      data: {
-        ...validatedData,
-        slug: finalSlug,
-        readTime,
-        publishedAt: validatedData.status === "PUBLISHED" ? new Date() : null,
-        userId: session.user.id,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
-        category: true,
-      },
-    });
-
-    return NextResponse.json(post, { status: 201 });
-  } catch (error) {
-    console.error("Error creating blog post:", error);
-    
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation error", details: error.errors },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Failed to create blog post" },
-      { status: 500 }
-    );
-  }
-}
+} 

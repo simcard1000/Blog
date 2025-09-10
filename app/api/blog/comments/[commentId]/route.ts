@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { db } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 // Schema for updating a comment
@@ -27,7 +27,7 @@ export async function PUT(
     const validatedData = updateCommentSchema.parse(body);
 
     // Find the comment and check ownership
-    const comment = await db.blogComment.findUnique({
+    const comment = await prisma.blogComment.findUnique({
       where: { id: commentId },
       select: { id: true, userEmail: true, isHidden: true },
     });
@@ -54,7 +54,7 @@ export async function PUT(
     }
 
     // Update the comment
-    const updatedComment = await db.blogComment.update({
+    const updatedComment = await prisma.blogComment.update({
       where: { id: commentId },
       data: {
         desc: validatedData.content,
@@ -110,7 +110,7 @@ export async function DELETE(
     const { commentId } = params;
 
     // Find the comment and check ownership
-    const comment = await db.blogComment.findUnique({
+    const comment = await prisma.blogComment.findUnique({
       where: { id: commentId },
       select: { id: true, userEmail: true, replies: { select: { id: true } } },
     });
@@ -131,7 +131,7 @@ export async function DELETE(
     }
 
     // Delete the comment (this will also delete replies due to cascade)
-    await db.blogComment.delete({
+    await prisma.blogComment.delete({
       where: { id: commentId },
     });
 

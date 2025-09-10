@@ -1,195 +1,94 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useSearchParams } from "next/navigation";
-import { useForm } from "react-hook-form";
-import * as z from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import Link from "next/link";
-
-import { useIsClient } from "@/hooks/use-is-client";
-import Spinner from "../spinner";
-import { LoginSchema } from "@/schemas";
-import CardWrapper from "./card-wrapper";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "../ui/form";
-import { Input } from "../ui/input";
-import { PasswordInput } from "../password-input";
-import { Button } from "../ui/button";
-import FormError from "../form-error";
-import FormSuccess from "../form-success";
-import { login } from "@/actions/login";
+import { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "sonner";
 
 interface LoginFormProps {
   onSuccess?: () => void;
 }
 
 const LoginForm = ({ onSuccess }: LoginFormProps) => {
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl");
-  const urlError =
-    searchParams.get("error") === "OAuthAccountNotLinked"
-      ? "Email already in use with a different provider!"
-      : "";
-  
-  // Check if this is part of the seller signup flow
-  const isSellerSignupFlow = callbackUrl === "/seller-application";
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
-  const [showTwoFactor, setShowTwoFactor] = useState(false);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
 
-  const [error, setError] = useState<string>("");
-  const [success, setSuccess] = useState<string>("");
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
 
-  const [isPending, startTransition] = useTransition();
-
-  const isClient = useIsClient();
-
-  const form = useForm<z.infer<typeof LoginSchema>>({
-    resolver: zodResolver(LoginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-      code: "",
-    },
-  });
-
-  const onSubmit = (values: z.infer<typeof LoginSchema>) => {
-    startTransition(() => {
-      try {
-        login(values, callbackUrl).then((data) => {
-          if (data?.error) {
-            form.reset();
-            setError(data.error);
-          }
-
-          if (data?.success) {
-            form.reset();
-            if (isSellerSignupFlow) {
-              setSuccess("Signing you in and redirecting to seller application...");
-            } else {
-              setSuccess(data.success);
-            }
-            onSuccess?.();
-          }
-
-          if (data?.twoFactor) {
-            setShowTwoFactor(true);
-          }
-        });
-      } catch (err) {
-        setError(`Something went wrong! Error:${err}`);
-      } finally {
-        setShowTwoFactor(false);
-        setSuccess("");
-        setError("");
+      if (result?.error) {
+        toast.error("Invalid credentials");
+      } else {
+        toast.success("Signed in successfully!");
+        onSuccess?.();
+        router.push("/blog");
       }
-    });
+    } catch (error) {
+      toast.error("An error occurred during sign in");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  if (!isClient) return <Spinner />;
-
   return (
-    <CardWrapper
-      backButtonLabel="Don't have an account?"
-      backButtonHref="/register"
-      showSocial
-      title={isSellerSignupFlow ? "Sign in to Continue" : "Welcome back"}
-      subtitle={isSellerSignupFlow ? "Complete your seller application" : "Sign in to your account"}
-    >
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="space-y-6"
-        >
-          <div className="space-y-4">
-            {showTwoFactor && (
-              <FormField
-                control={form.control}
-                name="code"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Two Factor Authentication Code</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        disabled={isPending}
-                        placeholder="123456"
-                        type="text"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-            {!showTwoFactor && (
-              <>
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          disabled={isPending}
-                          type="email"
-                          placeholder="your.email@example.com"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Password</FormLabel>
-                      <FormControl>
-                        <PasswordInput
-                          {...field}
-                          disabled={isPending}
-                          type="password"
-                          placeholder="******"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                      <Button
-                        size="sm"
-                        variant="link"
-                        asChild
-                        className="px-0 text-muted-foreground"
-                      >
-                        <Link href="/reset-password">Forgot your password?</Link>
-                      </Button>
-                    </FormItem>
-                  )}
-                />
-              </>
-            )}
+    <Card className="w-full max-w-md">
+      <CardHeader>
+        <CardTitle className="text-2xl text-center">Sign In</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="Enter your email"
+            />
           </div>
-          {error && <FormError message={error || urlError} />}
-          {success && <FormSuccess message={success} />}
-          <Button
-            type="submit"
-            disabled={isPending}
-            className="w-full hover:bg-purple-400"
-          >
-            {showTwoFactor ? "Confirm" : "Login"}
+          <div>
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="Enter your password"
+            />
+          </div>
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? "Signing in..." : "Sign In"}
           </Button>
         </form>
-      </Form>
-    </CardWrapper>
+        
+        <div className="mt-6 p-4 bg-gray-50 rounded-md">
+          <h3 className="text-sm font-medium mb-2">Demo Credentials:</h3>
+          <p className="text-sm text-gray-600">
+            <strong>Admin:</strong> admin@example.com / admin123
+          </p>
+          <p className="text-sm text-gray-600">
+            <strong>User:</strong> user@example.com / password123
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 

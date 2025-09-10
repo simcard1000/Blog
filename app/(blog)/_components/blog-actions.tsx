@@ -20,7 +20,7 @@ export const BlogActions = () => {
   if (status === "unauthenticated" || !session?.user) {
     return (
       <div className="flex gap-2 mb-6 justify-center">
-        <Link href="/auth/signin">
+        <Link href="/login">
           <Button>
             <LogIn className="w-4 h-4 mr-2" />
             Sign In

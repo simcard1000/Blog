@@ -1,45 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { z } from "zod";
+import { checkApiPermissions } from "@/lib/api-permissions";
+import { prisma } from "@/lib/prisma";
 
-// Validation schema for updating a blog post
-const updatePostSchema = z.object({
-  title: z.string().min(1, "Title is required").optional(),
-  description: z.string().min(1, "Description is required").optional(),
-  content: z.string().min(1, "Content is required").optional(),
-  catSlug: z.string().min(1, "Category is required").optional(),
-  status: z.enum(["DRAFT", "PUBLISHED"]).optional(),
-  isPrivate: z.boolean().optional(),
-  tags: z.string().optional(),
-  keywords: z.string().optional(),
-  readTime: z.number().optional(),
-  img: z.string().optional(),
-  metaTitle: z.string().optional(),
-  metaDescription: z.string().optional(),
-});
-
-// GET /api/blog/posts/[slug] - Get a specific blog post
 export async function GET(
   request: NextRequest,
   { params }: { params: { slug: string } }
 ) {
   try {
+    const permissionCheck = await checkApiPermissions(["WRITE_BLOG"]);
+    if (!permissionCheck.authorized) {
+      return NextResponse.json(
+        { error: permissionCheck.error },
+        { status: permissionCheck.status }
+      );
+    }
+
     const { slug } = params;
 
-    const post = await db.blogPost.findUnique({
+    // Get the blog post by slug and check if it belongs to the user
+    const post = await prisma.blogPost.findUnique({
       where: { slug },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
-        category: true,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        content: true,
+        contentBlocks: true,
+        catSlug: true,
+        status: true,
+        isPrivate: true,
+        tags: true,
+        keywords: true,
+        readTime: true,
+        img: true,
+        metaTitle: true,
+        metaDescription: true,
+        userEmail: true,
       },
     });
 
@@ -47,6 +43,14 @@ export async function GET(
       return NextResponse.json(
         { error: "Blog post not found" },
         { status: 404 }
+      );
+    }
+
+    // Check if the post belongs to the user
+    if (post.userEmail !== permissionCheck.user!.email) {
+      return NextResponse.json(
+        { error: "You can only edit your own blog posts" },
+        { status: 403 }
       );
     }
 
@@ -60,26 +64,40 @@ export async function GET(
   }
 }
 
-// PUT /api/blog/posts/[slug] - Update a blog post
 export async function PUT(
   request: NextRequest,
   { params }: { params: { slug: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const permissionCheck = await checkApiPermissions(["WRITE_BLOG"]);
+    if (!permissionCheck.authorized) {
+      return NextResponse.json(
+        { error: permissionCheck.error },
+        { status: permissionCheck.status }
+      );
     }
 
     const { slug } = params;
     const body = await request.json();
-    const validatedData = updatePostSchema.parse(body);
+    const {
+      title,
+      description,
+      content,
+      contentBlocks,
+      catSlug,
+      status,
+      isPrivate,
+      tags,
+      keywords,
+      readTime,
+      metaTitle,
+      metaDescription,
+    } = body;
 
-    // Check if post exists and user owns it
-    const existingPost = await db.blogPost.findUnique({
+    // First, get the blog post to check ownership
+    const existingPost = await prisma.blogPost.findUnique({
       where: { slug },
-      include: { user: true },
+      select: { id: true, userEmail: true },
     });
 
     if (!existingPost) {
@@ -89,89 +107,61 @@ export async function PUT(
       );
     }
 
-    // Check if user owns the post or is admin
-    if (existingPost.userId !== session.user.id && session.user.email !== "admin@example.com") {
+    // Check if the post belongs to the user
+    if (existingPost.userEmail !== permissionCheck.user!.email) {
       return NextResponse.json(
-        { error: "Forbidden" },
+        { error: "You can only edit your own blog posts" },
         { status: 403 }
       );
     }
 
-    // If category is being updated, check if it exists
-    if (validatedData.catSlug) {
-      const category = await db.blogCategory.findUnique({
-        where: { slug: validatedData.catSlug },
-      });
-
-      if (!category) {
-        return NextResponse.json(
-          { error: "Category not found" },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Generate new slug if title is being updated
+    // Generate new slug if title changed
     let newSlug = slug;
-    if (validatedData.title && validatedData.title !== existingPost.title) {
-      newSlug = validatedData.title
+    if (title) {
+      newSlug = title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)/g, "");
 
-      // Check if new slug already exists
-      const slugExists = await db.blogPost.findUnique({
-        where: { slug: newSlug },
-      });
+      // Check if new slug already exists (excluding current post)
+      if (newSlug !== slug) {
+        const slugExists = await prisma.blogPost.findUnique({
+          where: { slug: newSlug },
+        });
 
-      if (slugExists && slugExists.id !== existingPost.id) {
-        newSlug = `${newSlug}-${Date.now()}`;
+        if (slugExists) {
+          return NextResponse.json(
+            { error: "A blog post with this title already exists" },
+            { status: 400 }
+          );
+        }
       }
     }
 
-    // Calculate read time if content is being updated
-    let readTime = existingPost.readTime;
-    if (validatedData.content) {
-      const wordCount = validatedData.content.split(/\s+/).length;
-      readTime = Math.ceil(wordCount / 200);
-    }
-
-    const updateData = {
-      ...validatedData,
-      slug: newSlug,
-      readTime,
-      publishedAt: validatedData.status === "PUBLISHED" && existingPost.status === "DRAFT" 
-        ? new Date() 
-        : existingPost.publishedAt,
-    };
-
-    const post = await db.blogPost.update({
-      where: { slug },
-      data: updateData,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
-        category: true,
+    // Update the blog post
+    const updatedPost = await prisma.blogPost.update({
+      where: { id: existingPost.id },
+      data: {
+        title,
+        description,
+        content,
+        contentBlocks: contentBlocks || [],
+        slug: newSlug,
+        status,
+        isPrivate,
+        tags: tags || [],
+        keywords: keywords || [],
+        readTime,
+        metaTitle: metaTitle || null,
+        metaDescription: metaDescription || null,
+        catSlug,
+        publishedAt: status === "PUBLISHED" ? new Date() : null,
       },
     });
 
-    return NextResponse.json(post);
+    return NextResponse.json(updatedPost);
   } catch (error) {
     console.error("Error updating blog post:", error);
-    
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation error", details: error.errors },
-        { status: 400 }
-      );
-    }
-
     return NextResponse.json(
       { error: "Failed to update blog post" },
       { status: 500 }
@@ -179,43 +169,44 @@ export async function PUT(
   }
 }
 
-// DELETE /api/blog/posts/[slug] - Delete a blog post
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { slug: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const permissionCheck = await checkApiPermissions(["WRITE_BLOG"]);
+    if (!permissionCheck.authorized) {
+      return NextResponse.json(
+        { error: permissionCheck.error },
+        { status: permissionCheck.status }
+      );
     }
 
     const { slug } = params;
 
-    // Check if post exists and user owns it
-    const existingPost = await db.blogPost.findUnique({
+    // Check if the post exists and belongs to the user
+    const post = await prisma.blogPost.findUnique({
       where: { slug },
-      include: { user: true },
+      select: { id: true, userEmail: true },
     });
 
-    if (!existingPost) {
+    if (!post) {
       return NextResponse.json(
         { error: "Blog post not found" },
         { status: 404 }
       );
     }
 
-    // Check if user owns the post or is admin
-    if (existingPost.userId !== session.user.id && session.user.email !== "admin@example.com") {
+    if (post.userEmail !== permissionCheck.user!.email) {
       return NextResponse.json(
-        { error: "Forbidden" },
+        { error: "You can only delete your own blog posts" },
         { status: 403 }
       );
     }
 
-    await db.blogPost.delete({
-      where: { slug },
+    // Delete the blog post
+    await prisma.blogPost.delete({
+      where: { id: post.id },
     });
 
     return NextResponse.json({ message: "Blog post deleted successfully" });

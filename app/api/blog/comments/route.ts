@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { db } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 // Schema for creating a comment
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     }
 
     // First, check if the blog post exists and is public
-    const post = await db.blogPost.findUnique({
+    const post = await prisma.blogPost.findUnique({
       where: { slug: postSlug },
       select: { status: true, isPrivate: true, allowComments: true },
     });
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch comments with replies
-    const comments = await db.blogComment.findMany({
+    const comments = await prisma.blogComment.findMany({
       where: {
         postSlug,
         parentId: null, // Only top-level comments
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     const validatedData = createCommentSchema.parse(body);
 
     // Check if the blog post exists and allows comments
-    const post = await db.blogPost.findUnique({
+    const post = await prisma.blogPost.findUnique({
       where: { slug: validatedData.postSlug },
       select: { status: true, isPrivate: true, allowComments: true },
     });
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
 
     // If this is a reply, check if parent comment exists
     if (validatedData.parentId) {
-      const parentComment = await db.blogComment.findUnique({
+      const parentComment = await prisma.blogComment.findUnique({
         where: { id: validatedData.parentId },
         select: { id: true, postSlug: true },
       });
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the comment
-    const comment = await db.blogComment.create({
+    const comment = await prisma.blogComment.create({
       data: {
         desc: validatedData.content,
         userEmail: session.user.email,
