@@ -1,0 +1,82 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  image     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Blog-related fields
+  blogPosts BlogPost[]
+
+  @@map("users")
+}
+
+// Blog Category model
+model BlogCategory {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  description String?
+  img         String?
+  parentSlug  String?
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  posts BlogPost[]
+
+  @@map("blog_categories")
+}
+
+// Blog Post model
+model BlogPost {
+  id              String   @id @default(cuid())
+  title           String
+  slug            String   @unique
+  description     String
+  content         String
+  contentBlocks   Json?
+  img             String?
+  status          PostStatus @default(DRAFT)
+  isPrivate       Boolean  @default(false)
+  allowComments   Boolean  @default(true)
+  views           Int      @default(0)
+  readTime        Int?
+  tags            String[]
+  keywords        String[]
+  metaTitle       String?
+  metaDescription String?
+  publishedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  catSlug   String
+  category  BlogCategory @relation(fields: [catSlug], references: [slug], onDelete: Restrict)
+
+  @@map("blog_posts")
+}
+
+// Enums
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+}
