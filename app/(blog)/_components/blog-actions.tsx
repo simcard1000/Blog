@@ -2,9 +2,10 @@
 
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Plus, Settings } from "lucide-react";
+import { Plus, Settings, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrentPermissions } from "@/hooks/use-current-permissions";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 
 export const BlogActions = () => {
   const { data: session, status } = useSession();
@@ -15,39 +16,52 @@ export const BlogActions = () => {
     return null;
   }
 
-  // Don't render anything if not authenticated
+  // If not authenticated, show sign in button
   if (status === "unauthenticated" || !session?.user) {
-    return null;
+    return (
+      <div className="flex gap-2 mb-6 justify-center">
+        <Link href="/auth/signin">
+          <Button>
+            <LogIn className="w-4 h-4 mr-2" />
+            Sign In
+          </Button>
+        </Link>
+      </div>
+    );
   }
 
   // Check if user has blog permissions
   const hasWriteBlogPermission = permissions?.includes('WRITE_BLOG');
   const hasManageContentPermission = permissions?.includes('MANAGE_CONTENT');
 
-  // Don't render anything if user has no permissions
-  if (!hasWriteBlogPermission && !hasManageContentPermission) {
-    return null;
-  }
-
   return (
-    <div className="flex gap-2 mb-6">
-      {hasWriteBlogPermission && (
-        <Link href="/blog/new">
-          <Button>
-            <Plus className="w-4 h-4 mr-2" />
-            New Post
-          </Button>
-        </Link>
-      )}
+    <div className="flex gap-2 mb-6 justify-between items-center">
+      <div className="flex gap-2">
+        {hasWriteBlogPermission && (
+          <Link href="/blog/new">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              New Post
+            </Button>
+          </Link>
+        )}
+        
+        {hasManageContentPermission && (
+          <Link href="/blog/categories">
+            <Button variant="outline">
+              <Settings className="w-4 h-4 mr-2" />
+              Manage Categories
+            </Button>
+          </Link>
+        )}
+      </div>
       
-      {hasManageContentPermission && (
-        <Link href="/blog/categories">
-          <Button variant="outline">
-            <Settings className="w-4 h-4 mr-2" />
-            Manage Categories
-          </Button>
-        </Link>
-      )}
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">
+          Welcome, {session.user.name || session.user.email}
+        </span>
+        <SignOutButton />
+      </div>
     </div>
   );
 }; 

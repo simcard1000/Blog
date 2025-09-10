@@ -1,41 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkApiPermissions } from "@/lib/api-permissions";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { z } from "zod";
 
+// Validation schema for updating a blog post
+const updatePostSchema = z.object({
+  title: z.string().min(1, "Title is required").optional(),
+  description: z.string().min(1, "Description is required").optional(),
+  content: z.string().min(1, "Content is required").optional(),
+  catSlug: z.string().min(1, "Category is required").optional(),
+  status: z.enum(["DRAFT", "PUBLISHED"]).optional(),
+  isPrivate: z.boolean().optional(),
+  tags: z.string().optional(),
+  keywords: z.string().optional(),
+  readTime: z.number().optional(),
+  img: z.string().optional(),
+  metaTitle: z.string().optional(),
+  metaDescription: z.string().optional(),
+});
+
+// GET /api/blog/posts/[slug] - Get a specific blog post
 export async function GET(
   request: NextRequest,
   { params }: { params: { slug: string } }
 ) {
   try {
-    const permissionCheck = await checkApiPermissions(["WRITE_BLOG"]);
-    if (!permissionCheck.authorized) {
-      return NextResponse.json(
-        { error: permissionCheck.error },
-        { status: permissionCheck.status }
-      );
-    }
-
     const { slug } = params;
 
-    // Get the blog post by slug and check if it belongs to the user
     const post = await db.blogPost.findUnique({
       where: { slug },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        content: true,
-        contentBlocks: true,
-        catSlug: true,
-        status: true,
-        isPrivate: true,
-        tags: true,
-        keywords: true,
-        readTime: true,
-        img: true,
-        metaTitle: true,
-        metaDescription: true,
-        userEmail: true,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          },
+        },
+        category: true,
       },
     });
 
@@ -43,14 +47,6 @@ export async function GET(
       return NextResponse.json(
         { error: "Blog post not found" },
         { status: 404 }
-      );
-    }
-
-    // Check if the post belongs to the user
-    if (post.userEmail !== permissionCheck.user!.email) {
-      return NextResponse.json(
-        { error: "You can only edit your own blog posts" },
-        { status: 403 }
       );
     }
 
@@ -64,40 +60,26 @@ export async function GET(
   }
 }
 
+// PUT /api/blog/posts/[slug] - Update a blog post
 export async function PUT(
   request: NextRequest,
   { params }: { params: { slug: string } }
 ) {
   try {
-    const permissionCheck = await checkApiPermissions(["WRITE_BLOG"]);
-    if (!permissionCheck.authorized) {
-      return NextResponse.json(
-        { error: permissionCheck.error },
-        { status: permissionCheck.status }
-      );
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { slug } = params;
     const body = await request.json();
-    const {
-      title,
-      description,
-      content,
-      contentBlocks,
-      catSlug,
-      status,
-      isPrivate,
-      tags,
-      keywords,
-      readTime,
-      metaTitle,
-      metaDescription,
-    } = body;
+    const validatedData = updatePostSchema.parse(body);
 
-    // First, get the blog post to check ownership
+    // Check if post exists and user owns it
     const existingPost = await db.blogPost.findUnique({
       where: { slug },
-      select: { id: true, userEmail: true },
+      include: { user: true },
     });
 
     if (!existingPost) {
@@ -107,61 +89,89 @@ export async function PUT(
       );
     }
 
-    // Check if the post belongs to the user
-    if (existingPost.userEmail !== permissionCheck.user!.email) {
+    // Check if user owns the post or is admin
+    if (existingPost.userId !== session.user.id && session.user.email !== "admin@example.com") {
       return NextResponse.json(
-        { error: "You can only edit your own blog posts" },
+        { error: "Forbidden" },
         { status: 403 }
       );
     }
 
-    // Generate new slug if title changed
+    // If category is being updated, check if it exists
+    if (validatedData.catSlug) {
+      const category = await db.blogCategory.findUnique({
+        where: { slug: validatedData.catSlug },
+      });
+
+      if (!category) {
+        return NextResponse.json(
+          { error: "Category not found" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Generate new slug if title is being updated
     let newSlug = slug;
-    if (title) {
-      newSlug = title
+    if (validatedData.title && validatedData.title !== existingPost.title) {
+      newSlug = validatedData.title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)/g, "");
 
-      // Check if new slug already exists (excluding current post)
-      if (newSlug !== slug) {
-        const slugExists = await db.blogPost.findUnique({
-          where: { slug: newSlug },
-        });
+      // Check if new slug already exists
+      const slugExists = await db.blogPost.findUnique({
+        where: { slug: newSlug },
+      });
 
-        if (slugExists) {
-          return NextResponse.json(
-            { error: "A blog post with this title already exists" },
-            { status: 400 }
-          );
-        }
+      if (slugExists && slugExists.id !== existingPost.id) {
+        newSlug = `${newSlug}-${Date.now()}`;
       }
     }
 
-    // Update the blog post
-    const updatedPost = await db.blogPost.update({
-      where: { id: existingPost.id },
-      data: {
-        title,
-        description,
-        content,
-        contentBlocks: contentBlocks || [],
-        slug: newSlug,
-        status,
-        isPrivate,
-        tags: tags || [],
-        keywords: keywords || [],
-        readTime,
-        metaTitle: metaTitle || null,
-        metaDescription: metaDescription || null,
-        catSlug,
-        publishedAt: status === "PUBLISHED" ? new Date() : null,
+    // Calculate read time if content is being updated
+    let readTime = existingPost.readTime;
+    if (validatedData.content) {
+      const wordCount = validatedData.content.split(/\s+/).length;
+      readTime = Math.ceil(wordCount / 200);
+    }
+
+    const updateData = {
+      ...validatedData,
+      slug: newSlug,
+      readTime,
+      publishedAt: validatedData.status === "PUBLISHED" && existingPost.status === "DRAFT" 
+        ? new Date() 
+        : existingPost.publishedAt,
+    };
+
+    const post = await db.blogPost.update({
+      where: { slug },
+      data: updateData,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          },
+        },
+        category: true,
       },
     });
 
-    return NextResponse.json(updatedPost);
+    return NextResponse.json(post);
   } catch (error) {
     console.error("Error updating blog post:", error);
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Validation error", details: error.errors },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to update blog post" },
       { status: 500 }
@@ -169,44 +179,43 @@ export async function PUT(
   }
 }
 
+// DELETE /api/blog/posts/[slug] - Delete a blog post
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { slug: string } }
 ) {
   try {
-    const permissionCheck = await checkApiPermissions(["WRITE_BLOG"]);
-    if (!permissionCheck.authorized) {
-      return NextResponse.json(
-        { error: permissionCheck.error },
-        { status: permissionCheck.status }
-      );
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { slug } = params;
 
-    // Check if the post exists and belongs to the user
-    const post = await db.blogPost.findUnique({
+    // Check if post exists and user owns it
+    const existingPost = await db.blogPost.findUnique({
       where: { slug },
-      select: { id: true, userEmail: true },
+      include: { user: true },
     });
 
-    if (!post) {
+    if (!existingPost) {
       return NextResponse.json(
         { error: "Blog post not found" },
         { status: 404 }
       );
     }
 
-    if (post.userEmail !== permissionCheck.user!.email) {
+    // Check if user owns the post or is admin
+    if (existingPost.userId !== session.user.id && session.user.email !== "admin@example.com") {
       return NextResponse.json(
-        { error: "You can only delete your own blog posts" },
+        { error: "Forbidden" },
         { status: 403 }
       );
     }
 
-    // Delete the blog post
     await db.blogPost.delete({
-      where: { id: post.id },
+      where: { slug },
     });
 
     return NextResponse.json({ message: "Blog post deleted successfully" });

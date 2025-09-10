@@ -1,81 +1,65 @@
-import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { ROLES } from "@/data/roles-and-permissions";
-import { createBlogCategorySchema, blogCategoryQuerySchema } from "@/schemas/BlogCategorySchema";
 import { z } from "zod";
-import { checkApiPermissions } from "@/lib/api-permissions";
 
-// GET: Fetch categories
-export async function GET(req: Request) {
+// Validation schema for creating/updating a category
+const categorySchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  description: z.string().optional(),
+  img: z.string().optional(),
+  parentSlug: z.string().optional(),
+  order: z.number().default(0),
+  isActive: z.boolean().default(true),
+});
+
+// GET /api/blog/categories - Get all categories
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const query = {
-      includeInactive: searchParams.get("includeInactive") === "true",
-      parentSlug: searchParams.get("parentSlug") || undefined,
-      search: searchParams.get("search") || undefined,
-    };
-
-    // Validate query parameters
-    const validatedQuery = blogCategoryQuerySchema.parse(query);
+    const { searchParams } = new URL(request.url);
+    const activeOnly = searchParams.get("activeOnly") !== "false";
 
     const categories = await db.blogCategory.findMany({
-      where: {
-        isActive: validatedQuery.includeInactive ? undefined : true,
-        parentSlug: validatedQuery.parentSlug,
-        ...(validatedQuery.search && {
-          OR: [
-            { title: { contains: validatedQuery.search, mode: "insensitive" } },
-            { description: { contains: validatedQuery.search, mode: "insensitive" } },
-          ],
-        }),
-      },
-      orderBy: [
-        { order: "asc" },
-        { title: "asc" },
-      ],
+      where: activeOnly ? { isActive: true } : {},
       include: {
         _count: {
-          select: { posts: true },
+          select: {
+            posts: true,
+          },
         },
+      },
+      orderBy: {
+        order: "asc",
       },
     });
 
     return NextResponse.json(categories);
   } catch (error) {
-    console.error("Error fetching blog categories:", error);
-    
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Invalid query parameters", details: error.errors },
-        { status: 400 }
-      );
-    }
-
+    console.error("Error fetching categories:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to fetch categories" },
       { status: 500 }
     );
   }
 }
 
-// POST: Create a new category
-export async function POST(req: Request) {
+// POST /api/blog/categories - Create a new category
+export async function POST(request: NextRequest) {
   try {
-    // Check permissions using centralized function
-    const permissionCheck = await checkApiPermissions(['MANAGE_CONTENT']);
+    const session = await getServerSession(authOptions);
     
-    if (!permissionCheck.authorized) {
-      return NextResponse.json(
-        { error: permissionCheck.error },
-        { status: permissionCheck.status }
-      );
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
-    
-    // Validate request body
-    const validatedData = createBlogCategorySchema.parse(body);
+    // Check if user is admin
+    if (session.user.email !== "admin@example.com") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const validatedData = categorySchema.parse(body);
 
     // Generate slug from title
     const slug = validatedData.title
@@ -90,12 +74,12 @@ export async function POST(req: Request) {
 
     if (existingCategory) {
       return NextResponse.json(
-        { error: "A category with this title already exists" },
+        { error: "Category with this title already exists" },
         { status: 400 }
       );
     }
 
-    // If parentSlug is provided, verify it exists
+    // If parentSlug is provided, check if parent exists
     if (validatedData.parentSlug) {
       const parentCategory = await db.blogCategory.findUnique({
         where: { slug: validatedData.parentSlug },
@@ -104,57 +88,59 @@ export async function POST(req: Request) {
       if (!parentCategory) {
         return NextResponse.json(
           { error: "Parent category not found" },
-          { status: 404 }
+          { status: 400 }
         );
       }
     }
 
-    // Create the category
     const category = await db.blogCategory.create({
       data: {
-        title: validatedData.title,
+        ...validatedData,
         slug,
-        description: validatedData.description,
-        img: validatedData.img,
-        parentSlug: validatedData.parentSlug,
-        order: validatedData.order,
-        isActive: validatedData.isActive,
+      },
+      include: {
+        _count: {
+          select: {
+            posts: true,
+          },
+        },
       },
     });
 
-    return NextResponse.json(category);
+    return NextResponse.json(category, { status: 201 });
   } catch (error) {
-    console.error("Error creating blog category:", error);
+    console.error("Error creating category:", error);
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Invalid request data", details: error.errors },
+        { error: "Validation error", details: error.errors },
         { status: 400 }
       );
     }
 
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to create category" },
       { status: 500 }
     );
   }
 }
 
-// PUT: Update a category
-export async function PUT(req: Request) {
+// PUT /api/blog/categories?slug=... - Update a category
+export async function PUT(request: NextRequest) {
   try {
-    // Check permissions using centralized function
-    const permissionCheck = await checkApiPermissions(['MANAGE_CONTENT']);
+    const session = await getServerSession(authOptions);
     
-    if (!permissionCheck.authorized) {
-      return NextResponse.json(
-        { error: permissionCheck.error },
-        { status: permissionCheck.status }
-      );
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
-    const { slug, ...updateData } = body;
+    // Check if user is admin
+    if (session.user.email !== "admin@example.com") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const slug = searchParams.get("slug");
 
     if (!slug) {
       return NextResponse.json(
@@ -163,8 +149,8 @@ export async function PUT(req: Request) {
       );
     }
 
-    // Validate update data
-    const validatedData = createBlogCategorySchema.partial().parse(updateData);
+    const body = await request.json();
+    const validatedData = categorySchema.parse(body);
 
     // Check if category exists
     const existingCategory = await db.blogCategory.findUnique({
@@ -178,8 +164,36 @@ export async function PUT(req: Request) {
       );
     }
 
-    // If updating parentSlug, verify it exists
+    // Generate new slug if title is being updated
+    let newSlug = slug;
+    if (validatedData.title && validatedData.title !== existingCategory.title) {
+      newSlug = validatedData.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "");
+
+      // Check if new slug already exists
+      const slugExists = await db.blogCategory.findUnique({
+        where: { slug: newSlug },
+      });
+
+      if (slugExists && slugExists.id !== existingCategory.id) {
+        return NextResponse.json(
+          { error: "Category with this title already exists" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // If parentSlug is provided, check if parent exists and is not self
     if (validatedData.parentSlug) {
+      if (validatedData.parentSlug === newSlug) {
+        return NextResponse.json(
+          { error: "Category cannot be its own parent" },
+          { status: 400 }
+        );
+      }
+
       const parentCategory = await db.blogCategory.findUnique({
         where: { slug: validatedData.parentSlug },
       });
@@ -187,57 +201,59 @@ export async function PUT(req: Request) {
       if (!parentCategory) {
         return NextResponse.json(
           { error: "Parent category not found" },
-          { status: 404 }
-        );
-      }
-
-      // Prevent circular references
-      if (validatedData.parentSlug === slug) {
-        return NextResponse.json(
-          { error: "Category cannot be its own parent" },
           { status: 400 }
         );
       }
     }
 
-    // Update the category
-    const updatedCategory = await db.blogCategory.update({
+    const category = await db.blogCategory.update({
       where: { slug },
-      data: validatedData,
+      data: {
+        ...validatedData,
+        slug: newSlug,
+      },
+      include: {
+        _count: {
+          select: {
+            posts: true,
+          },
+        },
+      },
     });
 
-    return NextResponse.json(updatedCategory);
+    return NextResponse.json(category);
   } catch (error) {
-    console.error("Error updating blog category:", error);
+    console.error("Error updating category:", error);
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Invalid request data", details: error.errors },
+        { error: "Validation error", details: error.errors },
         { status: 400 }
       );
     }
 
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to update category" },
       { status: 500 }
     );
   }
 }
 
-// DELETE: Delete a category
-export async function DELETE(req: Request) {
+// DELETE /api/blog/categories?slug=... - Delete a category
+export async function DELETE(request: NextRequest) {
   try {
-    // Check permissions using centralized function
-    const permissionCheck = await checkApiPermissions(['MANAGE_CONTENT']);
+    const session = await getServerSession(authOptions);
     
-    if (!permissionCheck.authorized) {
-      return NextResponse.json(
-        { error: permissionCheck.error },
-        { status: permissionCheck.status }
-      );
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { searchParams } = new URL(req.url);
+    // Check if user is admin
+    if (session.user.email !== "admin@example.com") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
     const slug = searchParams.get("slug");
 
     if (!slug) {
@@ -248,48 +264,42 @@ export async function DELETE(req: Request) {
     }
 
     // Check if category exists
-    const category = await db.blogCategory.findUnique({
+    const existingCategory = await db.blogCategory.findUnique({
       where: { slug },
       include: {
         _count: {
-          select: { posts: true, children: true },
+          select: {
+            posts: true,
+          },
         },
       },
     });
 
-    if (!category) {
+    if (!existingCategory) {
       return NextResponse.json(
         { error: "Category not found" },
         { status: 404 }
       );
     }
 
-    // Check if category has posts or subcategories
-    if (category._count.posts > 0) {
+    // Check if category has posts
+    if (existingCategory._count.posts > 0) {
       return NextResponse.json(
         { error: "Cannot delete category with existing posts" },
         { status: 400 }
       );
     }
 
-    if (category._count.children > 0) {
-      return NextResponse.json(
-        { error: "Cannot delete category with subcategories" },
-        { status: 400 }
-      );
-    }
-
-    // Delete the category
     await db.blogCategory.delete({
       where: { slug },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ message: "Category deleted successfully" });
   } catch (error) {
-    console.error("Error deleting blog category:", error);
+    console.error("Error deleting category:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to delete category" },
       { status: 500 }
     );
   }
-} 
+}

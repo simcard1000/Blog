@@ -10,22 +10,24 @@ interface BlogCardProps {
     title: string;
     description: string;
     img?: string | null;
-    publishedAt: Date | null;
+    publishedAt: string | null;
     readTime?: number | null;
-    cat: {
+    category: {
       title: string;
       slug: string;
     };
     user: {
-      firstName?: string | null;
-      image?: string | null;
+      id: string;
+      name: string | null;
+      email: string;
+      image: string | null;
     };
   };
 }
 
 export const BlogCard = ({ post }: BlogCardProps) => {
   // Get author name from user profile or fallback to "Anonymous"
-  const authorName = post.user.firstName || "Anonymous";
+  const authorName = post.user.name || "Anonymous";
 
   return (
     <Link href={`/blog/${post.slug}`}>
@@ -50,7 +52,7 @@ export const BlogCard = ({ post }: BlogCardProps) => {
         <div className="flex flex-1 flex-col p-4">
           {/* Category */}
           <Badge variant="secondary" className="mb-2 w-fit">
-            {post.cat.title}
+            {post.category.title}
           </Badge>
 
           {/* Title */}

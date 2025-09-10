@@ -58,8 +58,8 @@ model BlogPost {
   allowComments   Boolean  @default(true)
   views           Int      @default(0)
   readTime        Int?
-  tags            String[]
-  keywords        String[]
+  tags            String
+  keywords        String
   metaTitle       String?
   metaDescription String?
   publishedAt     DateTime?
