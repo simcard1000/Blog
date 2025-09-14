@@ -29,8 +29,7 @@ const passwordRequired = (
 export const SettingsSchema = z
   .object({
     name: z.optional(z.string()),
-    isTwoFactorEnabled: z.optional(z.boolean()),
-    role: z.enum([ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.SELLER, ROLES.MEMBER]),
+    role: z.enum([ROLES.ADMIN, ROLES.MEMBER]),
     email: z.optional(z.string().email()),
     password: z.optional(z.string().min(1)),
     newPassword: z.optional(
@@ -87,7 +86,6 @@ export const LoginSchema = z.object({
   password: z.string().min(1, {
     message: "Please enter your password. Password is required.",
   }),
-  code: z.optional(z.string()),
 });
 
 export const RegisterSchema = z

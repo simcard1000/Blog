@@ -15,12 +15,12 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { PasswordInput } from "../password-input";
 import CardWrapper from "@/components/auth/card-wrapper";
 import { Button } from "@/components/ui/button";
 import { newPassword } from "@/actions/new-password";
-import FormError from "@/components/form-error";
-import FormSuccess from "@/components/form-success";
+import { PasswordInput } from "./password-input";
+import FormError from "../form-error";
+import FormSuccess from "../form-success";
 
 const NewPasswordForm = () => {
   const searchParams = useSearchParams();

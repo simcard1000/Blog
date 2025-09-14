@@ -1,7 +1,5 @@
 export const ROLES = {
-  SUPER_ADMIN: 'SUPER_ADMIN',
   ADMIN: 'ADMIN',
-  SELLER: 'SELLER',
   MEMBER: 'MEMBER',
 } as const;
 
@@ -9,53 +7,14 @@ export type Role = keyof typeof ROLES;
 
 // Admin Roles for specialized admin tasks
 export const ADMIN_ROLES = {
-  SUPER_ADMIN: 'SUPER_ADMIN',           // Full access to everything
   GENERAL_ADMIN: 'GENERAL_ADMIN',       // General admin tasks
-  SELLER_MANAGER: 'SELLER_MANAGER',     // Handles seller applications and issues
   CONTENT_MODERATOR: 'CONTENT_MODERATOR', // Manages content, blog, reviews
   CUSTOMER_SUPPORT: 'CUSTOMER_SUPPORT', // Handles customer issues and disputes
-  FINANCIAL_ADMIN: 'FINANCIAL_ADMIN',   // Handles financial matters, refunds, disputes
   SYSTEM_ADMIN: 'SYSTEM_ADMIN',         // Technical system management
 } as const;
 
 export type AdminRole = keyof typeof ADMIN_ROLES;
 
-// Admin Task Types
-export const ADMIN_TASK_TYPES = {
-  SELLER_APPLICATION_REVIEW: 'SELLER_APPLICATION_REVIEW',
-  CONTENT_MODERATION: 'CONTENT_MODERATION',
-  CUSTOMER_DISPUTE: 'CUSTOMER_DISPUTE',
-  REFUND_REQUEST: 'REFUND_REQUEST',
-  SYSTEM_MAINTENANCE: 'SYSTEM_MAINTENANCE',
-  USER_SUSPENSION: 'USER_SUSPENSION',
-  PRODUCT_REVIEW: 'PRODUCT_REVIEW',
-  BLOG_APPROVAL: 'BLOG_APPROVAL',
-  FINANCIAL_REVIEW: 'FINANCIAL_REVIEW',
-  GENERAL_TASK: 'GENERAL_TASK',
-} as const;
-
-export type AdminTaskType = keyof typeof ADMIN_TASK_TYPES;
-
-// Admin Task Status
-export const ADMIN_TASK_STATUS = {
-  PENDING: 'PENDING',
-  IN_PROGRESS: 'IN_PROGRESS',
-  COMPLETED: 'COMPLETED',
-  CANCELLED: 'CANCELLED',
-  ESCALATED: 'ESCALATED',
-} as const;
-
-export type AdminTaskStatus = keyof typeof ADMIN_TASK_STATUS;
-
-// Admin Task Priority
-export const ADMIN_TASK_PRIORITY = {
-  LOW: 'LOW',
-  MEDIUM: 'MEDIUM',
-  HIGH: 'HIGH',
-  URGENT: 'URGENT',
-} as const;
-
-export type AdminTaskPriority = keyof typeof ADMIN_TASK_PRIORITY;
 
 // Admin Notification Types
 export const ADMIN_NOTIFICATION_TYPES = {
@@ -84,7 +43,6 @@ export const PERMISSIONS = {
 
   // Dashboard Access
   ACCESS_ADMIN_DASHBOARD: { value: 'ACCESS_ADMIN_DASHBOARD', group: 'Dashboard Access', label: 'Access Admin Dashboard' },
-  ACCESS_SELLER_DASHBOARD: { value: 'ACCESS_SELLER_DASHBOARD', group: 'Dashboard Access', label: 'Access Seller Dashboard' },
   ACCESS_MEMBER_DASHBOARD: { value: 'ACCESS_MEMBER_DASHBOARD', group: 'Dashboard Access', label: 'Access Member Dashboard' },
   
   // Content Management
@@ -93,45 +51,12 @@ export const PERMISSIONS = {
   PUBLISH_BLOG: { value: 'PUBLISH_BLOG', group: 'Content Management', label: 'Publish Blog' },
   DELETE_BLOG: { value: 'DELETE_BLOG', group: 'Content Management', label: 'Delete Blog' },
   MANAGE_COMMENTS: { value: 'MANAGE_COMMENTS', group: 'Content Management', label: 'Manage Comments' },
-  WRITE_HELP_ARTICLES: { value: 'WRITE_HELP_ARTICLES', group: 'Content Management', label: 'Write Help Articles' },
-  PUBLISH_HELP_ARTICLES: { value: 'PUBLISH_HELP_ARTICLES', group: 'Content Management', label: 'Publish Help Articles' },
-  DELETE_HELP_ARTICLES: { value: 'DELETE_HELP_ARTICLES', group: 'Content Management', label: 'Delete Help Articles' },
-  MANAGE_HELP_CATEGORIES: { value: 'MANAGE_HELP_CATEGORIES', group: 'Content Management', label: 'Manage Help Categories' },
-  
-  // Product Management
-  MANAGE_PRODUCTS: { value: 'MANAGE_PRODUCTS', group: 'Product Management', label: 'Manage Products' },
-  CREATE_PRODUCTS: { value: 'CREATE_PRODUCTS', group: 'Product Management', label: 'Create Products' },
-  EDIT_PRODUCTS: { value: 'EDIT_PRODUCTS', group: 'Product Management', label: 'Edit Products' },
-  DELETE_PRODUCTS: { value: 'DELETE_PRODUCTS', group: 'Product Management', label: 'Delete Products' },
-  MANAGE_PRODUCT_CATEGORIES: { value: 'MANAGE_PRODUCT_CATEGORIES', group: 'Product Management', label: 'Manage Product Categories' },
-  
-  // Order Management
-  MANAGE_ORDERS: { value: 'MANAGE_ORDERS', group: 'Order Management', label: 'Manage Orders' },
-  VIEW_ORDERS: { value: 'VIEW_ORDERS', group: 'Order Management', label: 'View Orders' },
-  PROCESS_ORDERS: { value: 'PROCESS_ORDERS', group: 'Order Management', label: 'Process Orders' },
-  REFUND_ORDERS: { value: 'REFUND_ORDERS', group: 'Order Management', label: 'Refund Orders' },
-  
-  // Review Management
-  MANAGE_REVIEWS: { value: 'MANAGE_REVIEWS', group: 'Review Management', label: 'Manage Reviews' },
-  
-  // Seller Management
-  MANAGE_SELLERS: { value: 'MANAGE_SELLERS', group: 'Seller Management', label: 'Manage Sellers' },
-  APPROVE_SELLERS: { value: 'APPROVE_SELLERS', group: 'Seller Management', label: 'Approve Sellers' },
-  SUSPEND_SELLERS: { value: 'SUSPEND_SELLERS', group: 'Seller Management', label: 'Suspend Sellers' },
-  VIEW_SELLER_APPLICATIONS: { value: 'VIEW_SELLER_APPLICATIONS', group: 'Seller Management', label: 'View Seller Applications' },
-  
-  // Founding Seller Management
-  VIEW_FOUNDING_SELLERS: { value: 'VIEW_FOUNDING_SELLERS', group: 'Founding Seller Management', label: 'View Founding Sellers' },
-  MANAGE_FOUNDING_SELLERS: { value: 'MANAGE_FOUNDING_SELLERS', group: 'Founding Seller Management', label: 'Manage Founding Sellers' },
-  ASSIGN_LEGACY_FOUNDING_SELLER: { value: 'ASSIGN_LEGACY_FOUNDING_SELLER', group: 'Founding Seller Management', label: 'Assign Legacy Founding Seller Status' },
   
   // System Management
   MANAGE_SYSTEM: { value: 'MANAGE_SYSTEM', group: 'System Management', label: 'Manage System' },
   VIEW_LOGS: { value: 'VIEW_LOGS', group: 'System Management', label: 'View Logs' },
   MANAGE_ADMIN_SETTINGS: { value: 'MANAGE_ADMIN_SETTINGS', group: 'System Management', label: 'Manage Admin Settings' },
-  MANAGE_SELLER_SETTINGS: { value: 'MANAGE_SELLER_SETTINGS', group: 'System Management', label: 'Manage Seller Settings' },
   MANAGE_MEMBER_SETTINGS: { value: 'MANAGE_MEMBER_SETTINGS', group: 'System Management', label: 'Manage Member Settings' },
-  MANAGE_CURRENCIES: { value: 'MANAGE_CURRENCIES', group: 'System Management', label: 'Manage Currencies' },
   MANAGE_POLICIES: { value: 'MANAGE_POLICIES', group: 'System Management', label: 'Manage Policies' },
   
   // Analytics
@@ -182,7 +107,6 @@ export const getPermissionGroups = () => {
 
 // Default role permissions mapping (using permission values)
 export const ROLE_PERMISSIONS: Record<Role, string[]> = {
-  SUPER_ADMIN: getPermissionValues(), // Super admin has all permissions
   ADMIN: [
     'MANAGE_USERS',
     'VIEW_USERS',
@@ -215,72 +139,21 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     'MANAGE_NOTIFICATIONS',
     'MANAGE_REVIEWS',
   ],
-  SELLER: [
-    'ACCESS_SELLER_DASHBOARD',
-    'MANAGE_PRODUCTS',
-    'CREATE_PRODUCTS',
-    'EDIT_PRODUCTS',
-    'DELETE_PRODUCTS',
-    'VIEW_ORDERS',
-    'PROCESS_ORDERS',
-    'MANAGE_MESSAGES',
-    'MANAGE_REVIEWS',
-    'MANAGE_SELLER_SETTINGS',
-  ],
   MEMBER: [
     'ACCESS_MEMBER_DASHBOARD',
-    'VIEW_USERS',
-    'MANAGE_MESSAGES',
-    'MANAGE_REVIEWS',
     'MANAGE_MEMBER_SETTINGS',
   ],
 };
-
-// Initial seller permissions (when application is submitted, before onboarding completion)
-export const INITIAL_SELLER_PERMISSIONS = [
-  'ACCESS_SELLER_DASHBOARD',
-  'VIEW_ORDERS',
-  'PROCESS_ORDERS',
-  'MANAGE_MESSAGES',
-  'MANAGE_REVIEWS',
-  'MANAGE_SELLER_SETTINGS',
-];
-
-// Full seller permissions (after onboarding completion, including product permissions)
-export const FULL_SELLER_PERMISSIONS = [
-  'ACCESS_SELLER_DASHBOARD',
-  'MANAGE_PRODUCTS',
-  'CREATE_PRODUCTS',
-  'EDIT_PRODUCTS',
-  'DELETE_PRODUCTS',
-  'VIEW_ORDERS',
-  'PROCESS_ORDERS',
-  'MANAGE_MESSAGES',
-  'MANAGE_REVIEWS',
-  'MANAGE_SELLER_SETTINGS',
-];
 
 // Route permissions mapping
 export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   "/admin": ['ACCESS_ADMIN_DASHBOARD'],
   "/admin/users": ['MANAGE_USERS'],
   "/admin/users/[userId]": ['MANAGE_PERMISSIONS'],
-  "/admin/sellers": ['MANAGE_SELLERS'],
-  "/admin/seller-applications": ['VIEW_SELLER_APPLICATIONS'],
-  "/admin/founding-sellers": ['VIEW_FOUNDING_SELLERS'],
-  "/admin/orders": ['MANAGE_ORDERS'],
-  "/admin/products": ['MANAGE_PRODUCTS'],
   "/admin/blog": ['MANAGE_CONTENT'],
-  "/admin/help-center": ['MANAGE_HELP_CATEGORIES'],
   "/admin/settings": ['MANAGE_ADMIN_SETTINGS'],
   "/admin/analytics": ['VIEW_ANALYTICS'],
-  "/admin/onboarding-surveys": ['VIEW_ONBOARDING_SURVEYS'],
   "/admin/fraud-detection": ['VIEW_FRAUD_DETECTION'],
-  "/seller": ['ACCESS_SELLER_DASHBOARD'],
-  "/seller/orders": ['VIEW_ORDERS'],
-  "/seller/products": ['MANAGE_PRODUCTS'],
-  "/seller/messages": ['MANAGE_MESSAGES'],
-  "/seller/settings": ['MANAGE_SELLER_SETTINGS'],
   "/member": ['ACCESS_MEMBER_DASHBOARD'],
   "/member/messages": ['MANAGE_MESSAGES'],
 };
