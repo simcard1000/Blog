@@ -37,6 +37,7 @@ interface BlogCategory {
   isActive: boolean;
 }
 
+
 export default function Home() {
   const [featuredPosts, setFeaturedPosts] = useState<BlogPost[]>([]);
   const [categories, setCategories] = useState<BlogCategory[]>([]);
@@ -46,7 +47,7 @@ export default function Home() {
     const fetchData = async () => {
       try {
         // Fetch featured posts (latest 3)
-        const postsResponse = await fetch("/api/blog/posts?limit=3");
+        const postsResponse = await fetch("/api/blog/public?limit=3");
         const postsData = await postsResponse.json();
         setFeaturedPosts(postsData);
 
@@ -73,18 +74,18 @@ export default function Home() {
             <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               Welcome to Our Blog
             </h1>
-            <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+            <p className="text-xl text-white/90 dark:text-white/90 mb-8 max-w-2xl mx-auto">
               Discover insights, tutorials, and stories about web development, 
               programming, and the latest in technology.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button asChild size="lg" className="text-lg px-8">
+              <Button asChild size="lg" className="text-lg px-8 bg-white text-gray-900 hover:bg-gray-100 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100">
                 <Link href="/blog">
                   <BookOpen className="mr-2 h-5 w-5" />
                   Explore Articles
                 </Link>
               </Button>
-              <Button asChild variant="outline" size="lg" className="text-lg px-8">
+              <Button asChild variant="outline" size="lg" className="text-lg px-8 border-white text-white hover:bg-white hover:text-gray-900 dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-gray-900">
                 <Link href="/blog/categories">
                   Browse Categories
                   <ArrowRight className="ml-2 h-5 w-5" />

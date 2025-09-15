@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ProtectedLink } from "./shared/ProtectedLink";
+import Link from "next/link";
 import { usePermissions } from "@/components/providers/PermissionProvider";
 import { PERMISSIONS, Role } from "@/data/roles-and-permissions";
 
@@ -29,35 +29,11 @@ interface iAppProps {
 export function UserNav({ userInfo }: iAppProps) {
   const { hasPermission } = usePermissions();
 
-  // Role-based checks (simpler and more reliable for navigation)
-  const isAdmin = userInfo?.role === "SUPER_ADMIN" || userInfo?.role === "ADMIN";
-  const isSeller = userInfo?.role === "SELLER";
-  const isMember = userInfo?.role === "MEMBER";
-
-  // Permission-based checks for specific features
-  const canManageProducts = hasPermission(PERMISSIONS.MANAGE_PRODUCTS.value);
-  const canViewOrders = hasPermission(PERMISSIONS.VIEW_ORDERS.value);
-  const canManageOrders = hasPermission(PERMISSIONS.MANAGE_ORDERS.value);
-
-  // Determine dashboard route based on role
-  let dashboardRoute: string | null = null;
-  if (isAdmin) {
-    dashboardRoute = "/admin/dashboard";
-  } else if (isSeller) {
-    dashboardRoute = "/seller/dashboard";
-  } else if (isMember) {
-    dashboardRoute = "/member/dashboard";
-  }
-
-  // Determine settings route based on role
-  let settingsRoute: string | null = null;
-  if (isAdmin) {
-    settingsRoute = "/admin/dashboard/settings";
-  } else if (isSeller) {
-    settingsRoute = "/seller/dashboard/settings";
-  } else if (isMember) {
-    settingsRoute = "/member/dashboard/settings";
-  }
+  // Permission-based checks for blog features
+  const canWriteBlog = hasPermission(PERMISSIONS.WRITE_BLOG.value);
+  const canManageContent = hasPermission(PERMISSIONS.MANAGE_CONTENT.value);
+  const canAccessAdminDashboard = hasPermission(PERMISSIONS.ACCESS_ADMIN_DASHBOARD.value);
+  const canAccessMemberDashboard = hasPermission(PERMISSIONS.ACCESS_MEMBER_DASHBOARD.value);
 
   return (
     <DropdownMenu>
@@ -81,43 +57,34 @@ export function UserNav({ userInfo }: iAppProps) {
         <DropdownMenuSeparator />
 
         <DropdownMenuGroup>
-          {dashboardRoute && (
-            <DropdownMenuItem>
-              <ProtectedLink href={dashboardRoute} className="w-full">Account</ProtectedLink>
+          {/* Blog-specific menu items */}
+          {canWriteBlog && (
+            <DropdownMenuItem asChild>
+              <Link href="/blog/new" className="w-full">Write Article</Link>
             </DropdownMenuItem>
           )}
-          {settingsRoute && (
-            <DropdownMenuItem>
-              <ProtectedLink href={settingsRoute} className="w-full">Settings</ProtectedLink>
-            </DropdownMenuItem>
-          )}
-          
-          {/* Admin-specific menu items */}
-          {isAdmin && canManageProducts && (
-            <DropdownMenuItem>
-              <ProtectedLink href="/admin/dashboard/products" className="w-full">All Products</ProtectedLink>
-            </DropdownMenuItem>
-          )}
-          {isAdmin && canManageOrders && (
-            <DropdownMenuItem>
-              <ProtectedLink href="/admin/dashboard/orders" className="w-full">All Orders</ProtectedLink>
+          {canWriteBlog && (
+            <DropdownMenuItem asChild>
+              <Link href="/blog" className="w-full">My Articles</Link>
             </DropdownMenuItem>
           )}
           
-          {/* Seller-specific menu items (only show for sellers, not admins) */}
-          {isSeller && !isAdmin && canManageProducts && (
-            <DropdownMenuItem>
-              <ProtectedLink href="/seller/dashboard/products" className="w-full">My Products</ProtectedLink>
+          {/* Dashboard access */}
+          {canAccessAdminDashboard && (
+            <DropdownMenuItem asChild>
+              <Link href="/admin/dashboard" className="w-full">Admin Dashboard</Link>
             </DropdownMenuItem>
           )}
-          {isSeller && !isAdmin && canViewOrders && (
-            <DropdownMenuItem>
-              <ProtectedLink href="/seller/dashboard/my-orders" className="w-full">My Orders</ProtectedLink>
+          {canAccessMemberDashboard && !canAccessAdminDashboard && (
+            <DropdownMenuItem asChild>
+              <Link href="/member/dashboard" className="w-full">My Dashboard</Link>
             </DropdownMenuItem>
           )}
-          {isSeller && !isAdmin && (
-            <DropdownMenuItem>
-              <ProtectedLink href="/seller/dashboard/billing" className="w-full">Billing</ProtectedLink>
+          
+          {/* Content management for admins */}
+          {canManageContent && (
+            <DropdownMenuItem asChild>
+              <Link href="/admin/content" className="w-full">Manage Content</Link>
             </DropdownMenuItem>
           )}
         </DropdownMenuGroup>
